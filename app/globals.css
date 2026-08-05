@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --color-night-950: #06070d;
+  --color-night-900: #0a0c16;
+  --color-night-800: #10131f;
+  --color-night-700: #181c2e;
+  --color-night-600: #232842;
+  --color-ink-100: #eef0fa;
+  --color-ink-300: #b8bdd4;
+  --color-ink-500: #7e849e;
+  --color-violet-glow: #8b7cf6;
+  --color-cyan-glow: #4ed3e0;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-night-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* faint blueprint grid over the whole page */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(139, 124, 246, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 124, 246, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.glow-violet {
+  box-shadow: 0 0 80px 8px rgba(139, 124, 246, 0.18);
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, #a99cff 0%, #4ed3e0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(24, 28, 46, 0.75), rgba(16, 19, 31, 0.9));
+  border: 1px solid rgba(139, 124, 246, 0.14);
+  border-radius: 1rem;
+  transition: border-color 0.25s ease, transform 0.25s ease;
+}
+
+.card:hover {
+  border-color: rgba(139, 124, 246, 0.4);
+  transform: translateY(-2px);
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--color-cyan-glow);
+  background: rgba(78, 211, 224, 0.08);
+  border: 1px solid rgba(78, 211, 224, 0.22);
+  border-radius: 9999px;
+  padding: 0.2rem 0.65rem;
+  white-space: nowrap;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up {
+  animation: fade-up 0.7s ease both;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
