@@ -70,6 +70,24 @@ document.addEventListener("DOMContentLoaded", function () {
       toast.style.transform = "translateX(-50%) translateY(8px)";
     }, 2200);
   }
+  // Discreet "HQ" link in the nav to the private dashboard. The page runtime
+  // re-renders the nav, so re-append whenever it disappears.
+  function ensureHQ() {
+    if (document.getElementById("hq-link")) return;
+    var links = document.querySelectorAll("nav a");
+    if (!links.length) return;
+    var last = links[links.length - 1];
+    var a = document.createElement("a");
+    a.id = "hq-link";
+    a.href = "/app";
+    a.textContent = "HQ";
+    a.title = "Pranav HQ — private dashboard";
+    a.setAttribute("style", (last.getAttribute("style") || "") + ";opacity:.7");
+    last.parentElement.appendChild(a);
+  }
+  setTimeout(ensureHQ, 800);
+  setInterval(ensureHQ, 2500);
+
   document.body.addEventListener("click", function (e) {
     var a = e.target && e.target.closest && e.target.closest('a[href^="mailto:"]');
     if (!a) return;

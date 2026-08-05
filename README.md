@@ -1,24 +1,23 @@
 # Pranav Modem — Portfolio v2 · pranavmodem.com
 
-RPG-themed portfolio ("Data Artificer, Lv. 7") built in Claude Design, served
-by **Next.js 15** with an AI assistant, **Supabase** logging, and free-tier
-LLM providers. Deployed on **Vercel**.
+RPG-themed portfolio ("Data Artificer, Lv. 7") served by **Next.js 15** with
+an AI assistant, **Supabase** logging, and free-tier LLM providers. Deployed
+on **Vercel**.
 
 ## How it's put together
 
-- **The page** is the Claude Design export, served statically:
-  - `design/source.dc.html` — the original self-contained export (source of truth for the UI)
+- **The page** is a self-contained design bundle, served statically:
+  - `design/source.dc.html` — the design source (source of truth for the UI)
   - `design/build-design.py` — unpacks it into `public/index.html` + `public/ds/*`
-    (fonts, photo, Phosphor icons, React, the design runtime), rewrites asset refs,
-    injects SEO tags, and adds a shim that routes the design's built-in chat
-    (`window.claude.complete`) to this site's `/api/chat`
+    (fonts, photo, Phosphor icons, React, the page runtime), rewrites asset refs,
+    injects SEO tags, and routes the page's built-in chat to this site's `/api/chat`
   - `next.config.ts` rewrites `/` → `/index.html`
 - **The assistant** (`app/api/chat/route.ts` + `lib/ai.ts`):
   - Free-tier provider chain: **Groq** → **Cerebras** → **OpenRouter** → **Gemini**,
     each falling through on errors/rate limits, with a built-in profile-grounded
     responder when no key is set — the chat always works
-  - Persona: always positive about Pranav, grounded in `lib/bio.ts` (mirrors the
-    BIO embedded in the design), redirects off-topic questions
+  - Persona: always positive about Pranav, grounded in `lib/bio.ts`, redirects
+    off-topic questions
 - **Supabase** (project `portfolio-v2`, `anifxfvhgymuzvessuuw`, us-east-2):
   - `chat_messages` (session transcripts) and `contact_messages`
   - RLS: anonymous visitors can insert, never read
@@ -44,7 +43,8 @@ npm run dev                  # http://localhost:3000
 ## Pranav HQ — private tracker at `/app`
 
 Mobile-first PWA (installable from the browser menu / iOS "Add to Home Screen";
-`start_url` opens `/app`). Sign in with your email (Supabase Auth OTP/magic link).
+`start_url` opens `/app`). Reach it via the small **HQ** link in the site nav or
+go to `/app` directly, then sign in with your email (Supabase magic link/code).
 
 - **Track**: log diet, gym, water, sleep, or anything (note + optional number);
   gym streak and daily counts; 14-day history. RLS keeps rows per-user.
@@ -73,7 +73,7 @@ Mobile-first PWA (installable from the browser menu / iOS "Add to Home Screen";
 
 ## Updating the design or content
 
-- **UI**: re-export from Claude Design, replace `design/source.dc.html`, run
+- **UI**: replace `design/source.dc.html` with an updated design bundle, run
   `python3 design/build-design.py`, commit the regenerated `public/` files.
 - **Assistant knowledge**: edit `lib/bio.ts` (and keep the BIO inside the design
-  export in sync when you next re-export).
+  source in sync when you next update it).
