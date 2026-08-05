@@ -41,6 +41,36 @@ npm run dev                  # http://localhost:3000
    - optional fallbacks: `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`
 3. Deploy, then add the domain **pranavmodem.com** (Settings → Domains) and point DNS at Vercel.
 
+## Pranav HQ — private tracker at `/app`
+
+Mobile-first PWA (installable from the browser menu / iOS "Add to Home Screen";
+`start_url` opens `/app`). Sign in with your email (Supabase Auth OTP/magic link).
+
+- **Track**: log diet, gym, water, sleep, or anything (note + optional number);
+  gym streak and daily counts; 14-day history. RLS keeps rows per-user.
+- **Assistant**: when signed in, the bot switches to personal mode — any topic,
+  including diet/nutrition and workout advice, with your recent log as context.
+- **Reminders**: title + time + days; delivered as web-push notifications to
+  every device where you tapped "Enable notifications".
+
+### One-time setup for reminders & auth
+
+1. Vercel env vars (in addition to the ones above):
+   - `VAPID_PRIVATE_KEY` — pairs with the public key in `.env.example`
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase dashboard → Settings → API
+   - `CRON_SECRET` — any random string
+2. Schedule the reminder check every 5–15 min (Vercel Hobby cron is only daily,
+   kept in `vercel.json` as a backstop): create a free job at
+   [cron-job.org](https://cron-job.org) hitting
+   `https://pranavmodem.com/api/cron/reminders?secret=<CRON_SECRET>`.
+3. Supabase dashboard → Auth → URL Configuration: set Site URL to
+   `https://pranavmodem.com` and add `https://pranavmodem.com/app` to Redirect
+   URLs (so magic links land on the dashboard). Optional: add `{{ .Token }}`
+   to the Magic Link email template to also get a 6-digit code.
+4. iPhone: open the site in Safari → Share → **Add to Home Screen**, launch it
+   from there, then tap "Enable notifications" in the Reminders tab (iOS only
+   allows web push for installed PWAs).
+
 ## Updating the design or content
 
 - **UI**: re-export from Claude Design, replace `design/source.dc.html`, run

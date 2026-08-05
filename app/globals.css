@@ -57,6 +57,24 @@ body {
   transform: translateY(-2px);
 }
 
+.btn-primary {
+  border-radius: 0.5rem;
+  background: var(--color-violet-glow);
+  padding: 0.55rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-night-950);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-primary:hover {
+  transform: scale(1.02);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+}
+
 .chip {
   font-family: var(--font-mono);
   font-size: 0.72rem;

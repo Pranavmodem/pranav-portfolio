@@ -15,6 +15,48 @@ Rules:
 PROFILE:
 ${BIO}`;
 
+type Entry = { kind: string; note: string | null; value: number | null; logged_at: string };
+
+/**
+ * Personal mode — used when Pranav is logged in at /app. No topic
+ * restrictions: general questions, diet and nutrition advice, workout
+ * planning, anything. Recent tracker entries are provided as context.
+ */
+export async function generatePersonalReply(
+  messages: ChatMessage[],
+  entries: Entry[]
+): Promise<{ reply: string; provider: string }> {
+  const log = entries
+    .map((e) => {
+      const when = new Date(e.logged_at).toLocaleString("en-US", {
+        timeZone: "America/Chicago",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return `- [${when}] ${e.kind}${e.value != null ? ` (${e.value})` : ""}${e.note ? `: ${e.note}` : ""}`;
+    })
+    .join("\n");
+
+  const system = `You are Pranav's personal assistant inside his private dashboard. Pranav Modem is a data engineer in Dallas–Fort Worth who tracks his diet, gym sessions, and habits here.
+
+- Answer ANY question helpfully — nutrition, meal ideas, workout programming, recovery, scheduling, technical topics, general knowledge. You are not limited to any subject.
+- For diet and fitness questions, give practical, specific, encouraging advice. Use his recent log below to personalize (patterns, streaks, gaps, calories/macros if noted). Note you're not a medical professional if something needs a doctor.
+- Be concise by default (under ~8 sentences) but go deeper when asked.
+- Plain text, no markdown headers.
+
+HIS RECENT TRACKER LOG (newest first)${log ? ":\n" + log : ": (no entries yet)"}`;
+
+  const viaProvider = await generateWithSystem(system, messages);
+  if (viaProvider) return viaProvider;
+  return {
+    reply:
+      "No AI provider is configured yet — add a free GROQ_API_KEY (console.groq.com/keys) in Vercel to unlock full answers. Your tracker and reminders still work!",
+    provider: "local",
+  };
+}
+
 // Free-tier provider chain (best fits from freellmapi.co's catalog for a
 // public, low-volume chatbot). All but Gemini share the OpenAI chat format.
 const OPENAI_COMPATIBLE_PROVIDERS = [
@@ -48,12 +90,22 @@ const OPENAI_COMPATIBLE_PROVIDERS = [
  * rate-limited free tier degrades gracefully instead of breaking the chat.
  */
 export async function generateReply(messages: ChatMessage[]): Promise<{ reply: string; provider: string }> {
+  const viaProvider = await generateWithSystem(SYSTEM_PROMPT, messages);
+  if (viaProvider) return viaProvider;
+  return { reply: localReply(messages[messages.length - 1]?.content ?? ""), provider: "local" };
+}
+
+/** Runs the provider chain with a given system prompt; null when every provider is unavailable. */
+async function generateWithSystem(
+  system: string,
+  messages: ChatMessage[]
+): Promise<{ reply: string; provider: string } | null> {
   for (const p of OPENAI_COMPATIBLE_PROVIDERS) {
     const key = process.env[p.keyEnv];
     if (!key) continue;
     try {
       const model = process.env[p.modelEnv] || p.defaultModel;
-      return { reply: await callOpenAICompatible(p.url, key, model, messages), provider: p.name };
+      return { reply: await callOpenAICompatible(p.url, key, model, system, messages), provider: p.name };
     } catch (err) {
       console.error(`${p.name} failed, trying next provider:`, err);
     }
@@ -62,18 +114,19 @@ export async function generateReply(messages: ChatMessage[]): Promise<{ reply: s
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     try {
-      return { reply: await callGemini(geminiKey, messages), provider: "gemini" };
+      return { reply: await callGemini(geminiKey, system, messages), provider: "gemini" };
     } catch (err) {
       console.error("Gemini failed, falling back to local responder:", err);
     }
   }
-  return { reply: localReply(messages[messages.length - 1]?.content ?? ""), provider: "local" };
+  return null;
 }
 
 async function callOpenAICompatible(
   url: string,
   apiKey: string,
   model: string,
+  system: string,
   messages: ChatMessage[]
 ): Promise<string> {
   const res = await fetch(url, {
@@ -81,7 +134,7 @@ async function callOpenAICompatible(
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: "system", content: system }, ...messages],
       max_tokens: 512,
       temperature: 0.6,
     }),
@@ -93,7 +146,7 @@ async function callOpenAICompatible(
   return text.trim();
 }
 
-async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<string> {
+async function callGemini(apiKey: string, system: string, messages: ChatMessage[]): Promise<string> {
   const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -101,7 +154,7 @@ async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        system_instruction: { parts: [{ text: system }] },
         contents: messages.map((m) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }],

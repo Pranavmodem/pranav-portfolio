@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateReply, type ChatMessage } from "@/lib/ai";
-import { supabase } from "@/lib/supabase";
+import { generateReply, generatePersonalReply, type ChatMessage } from "@/lib/ai";
+import { supabase, createUserClient, getUserFromToken } from "@/lib/supabase";
 
 export const maxDuration = 30;
 
 const MAX_MESSAGES = 20;
-const MAX_CHARS = 2000;
+const MAX_CHARS = 4000;
 
 export async function POST(req: NextRequest) {
   let body: { messages?: ChatMessage[]; sessionId?: string };
@@ -30,6 +30,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Last message must be from the user" }, { status: 400 });
   }
 
+  // Personal mode: a valid Supabase session token switches the bot from the
+  // public portfolio persona to Pranav's own assistant (any topic, with
+  // recent tracker entries as context for diet/gym questions).
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null;
+  const user = await getUserFromToken(token);
+
+  if (user && token) {
+    const db = createUserClient(token);
+    const { data: entries } = await db
+      .from("entries")
+      .select("kind, note, value, logged_at")
+      .order("logged_at", { ascending: false })
+      .limit(40);
+    const { reply, provider } = await generatePersonalReply(messages, entries ?? []);
+    return NextResponse.json({ reply, provider, mode: "personal" });
+  }
+
   const { reply, provider } = await generateReply(messages);
 
   // Fire-and-forget logging; UUID session ids only, chat still works if logging fails.
@@ -47,5 +64,5 @@ export async function POST(req: NextRequest) {
       });
   }
 
-  return NextResponse.json({ reply, provider });
+  return NextResponse.json({ reply, provider, mode: "public" });
 }

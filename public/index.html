@@ -15,6 +15,49 @@
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#161826">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/mobile.css">
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js");</script>
+<script>
+// Email links copy the address to the clipboard (with a toast) instead of
+// launching a mail client.
+document.addEventListener("DOMContentLoaded", function () {
+  var toast;
+  function showToast(msg) {
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);background:var(--color-accent,#9184d9);color:#161826;font:600 14px/1 var(--font-body,sans-serif);padding:12px 20px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:99;opacity:0;transition:opacity .25s ease, transform .25s ease;pointer-events:none";
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    requestAnimationFrame(function () {
+      toast.style.opacity = "1";
+      toast.style.transform = "translateX(-50%) translateY(0)";
+    });
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-50%) translateY(8px)";
+    }, 2200);
+  }
+  document.body.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href^="mailto:"]');
+    if (!a) return;
+    e.preventDefault();
+    var email = a.getAttribute("href").replace(/^mailto:/, "").split("?")[0];
+    (navigator.clipboard && navigator.clipboard.writeText
+      ? navigator.clipboard.writeText(email)
+      : Promise.reject()
+    ).then(
+      function () { showToast(email + " copied to clipboard ✓"); },
+      function () { window.location.href = "mailto:" + email; }
+    );
+  });
+});
+</script>
 <script>
 // Bridge the design's chat (window.claude.complete, an API that exists inside
 // Claude artifacts) to this site's own /api/chat endpoint.

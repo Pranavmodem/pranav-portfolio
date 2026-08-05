@@ -1,0 +1,87 @@
+/* Responsive overrides for the Claude Design export (public/index.html).
+   The design uses inline styles (re-serialized by its React runtime, which
+   inserts spaces — e.g. "grid-template-columns: 200px 1fr"), so selectors
+   below match value fragments that survive both serializations, and every
+   rule pins the layout down with !important. */
+
+@media (max-width: 860px) {
+  nav {
+    padding: 12px 18px !important;
+  }
+  nav a {
+    font-size: 13px !important;
+  }
+
+  header {
+    grid-template-columns: 1fr !important;
+    padding: 72px 20px 56px !important;
+    gap: 40px !important;
+  }
+  header h1 {
+    font-size: clamp(44px, 11vw, 76px) !important;
+  }
+  /* hero portrait */
+  .lighten[style*="340px"] {
+    width: min(340px, 76vw) !important;
+    margin: 0 auto !important;
+  }
+
+  section {
+    padding: 64px 20px 24px !important;
+  }
+  #treasure {
+    margin-top: 64px !important;
+  }
+  h2[style*="36px"] {
+    font-size: 28px !important;
+  }
+  h2[style*="40px"] {
+    font-size: 30px !important;
+  }
+
+  /* character sheet: about + attributes side-by-side -> stacked */
+  div[style*="1.1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* achievements: 3-up -> 2-up */
+  div[style*="repeat(3,1fr)"],
+  div[style*="repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* journey trail: 6 stops -> 3 per row */
+  div[style*="repeat(6,1fr)"],
+  div[style*="repeat(6, 1fr)"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    row-gap: 28px !important;
+  }
+  /* quest cards + contact cards: 2-up -> stacked */
+  div[style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* experience campsites: meta column + body -> stacked */
+  div[style*="200px 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    padding: 22px !important;
+  }
+  /* treasure links: 5-up -> 2-up */
+  div[style*="repeat(5,1fr)"],
+  div[style*="repeat(5, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  header h1 {
+    font-size: clamp(38px, 12vw, 56px) !important;
+  }
+  /* achievements single column on small phones */
+  div[style*="repeat(3,1fr)"],
+  div[style*="repeat(3, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* keep the floor clear for the robo pet */
+  #robo-ball {
+    display: none !important;
+  }
+}
