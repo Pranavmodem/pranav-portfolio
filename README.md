@@ -1,53 +1,49 @@
-# Pranav Modem — Portfolio v2
+# Pranav Modem — Portfolio v2 · pranavmodem.com
 
-Personal portfolio with an AI assistant that answers questions about Pranav's
-experience, grounded in his resume. Built with **Next.js 15**, **Tailwind CSS 4**,
-**Supabase**, and deployed on **Vercel** — all free tiers.
+RPG-themed portfolio ("Data Artificer, Lv. 7") built in Claude Design, served
+by **Next.js 15** with an AI assistant, **Supabase** logging, and free-tier
+LLM providers. Deployed on **Vercel**.
 
-## Features
+## How it's put together
 
-- 🌙 Dark "nocturne" single-page portfolio: hero, experience timeline, AI/ML projects, skills, contact
-- 🤖 Floating AI chat widget — resume-grounded, recruiter-friendly answers
-  - Free-tier provider chain: **Groq** → **Cerebras** → **OpenRouter** → **Google Gemini** → built-in offline responder (no key needed)
-  - Providers picked from the [freellmapi](https://github.com/tashfeenahmed/freellmapi) free-LLM catalog; each falls through on rate limits/errors
-- 🗄️ **Supabase** (free tier) stores chat transcripts and contact-form messages
-  - Row Level Security: anonymous visitors can only *insert*, never read
-- ⚡ Zero paid dependencies
+- **The page** is the Claude Design export, served statically:
+  - `design/source.dc.html` — the original self-contained export (source of truth for the UI)
+  - `design/build-design.py` — unpacks it into `public/index.html` + `public/ds/*`
+    (fonts, photo, Phosphor icons, React, the design runtime), rewrites asset refs,
+    injects SEO tags, and adds a shim that routes the design's built-in chat
+    (`window.claude.complete`) to this site's `/api/chat`
+  - `next.config.ts` rewrites `/` → `/index.html`
+- **The assistant** (`app/api/chat/route.ts` + `lib/ai.ts`):
+  - Free-tier provider chain: **Groq** → **Cerebras** → **OpenRouter** → **Gemini**,
+    each falling through on errors/rate limits, with a built-in profile-grounded
+    responder when no key is set — the chat always works
+  - Persona: always positive about Pranav, grounded in `lib/bio.ts` (mirrors the
+    BIO embedded in the design), redirects off-topic questions
+- **Supabase** (project `portfolio-v2`, `anifxfvhgymuzvessuuw`, us-east-2):
+  - `chat_messages` (session transcripts) and `contact_messages`
+  - RLS: anonymous visitors can insert, never read
+  - Review rows in the [dashboard](https://supabase.com/dashboard/project/anifxfvhgymuzvessuuw) → Table Editor
 
 ## Local development
 
 ```bash
 npm install
-cp .env.example .env.local   # optionally add GROQ_API_KEY / GEMINI_API_KEY
-npm run dev
+cp .env.example .env.local   # optionally add GROQ_API_KEY etc.
+npm run dev                  # http://localhost:3000
 ```
 
 ## Deploy to Vercel
 
-1. Push this repo to GitHub.
-2. In [Vercel](https://vercel.com/new), **Import** the repo (framework auto-detects Next.js).
-3. Add environment variables (Settings → Environment Variables):
-   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (values in `.env.example`)
+1. Import this repo at [vercel.com/new](https://vercel.com/new) (Next.js auto-detected).
+2. Environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (values in `.env.example`)
    - `GROQ_API_KEY` — free key from [console.groq.com/keys](https://console.groq.com/keys)
-   - *(optional fallbacks)* `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`
-4. Deploy, then add the custom domain **pranavmodem.com** (Project → Settings → Domains) and point your DNS at Vercel.
+   - optional fallbacks: `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`
+3. Deploy, then add the domain **pranavmodem.com** (Settings → Domains) and point DNS at Vercel.
 
-Without any AI key the chatbot still works using built-in resume-grounded answers.
+## Updating the design or content
 
-## Supabase schema
-
-Project: `portfolio-v2` (`anifxfvhgymuzvessuuw`, us-east-2). Migration
-`portfolio_chat_and_contact` creates:
-
-| table | purpose | RLS |
-|---|---|---|
-| `chat_messages` | chat transcripts (`session_id`, `role`, `content`) | anon insert-only |
-| `contact_messages` | contact form submissions | anon insert-only |
-
-Read submissions in the [Supabase dashboard](https://supabase.com/dashboard/project/anifxfvhgymuzvessuuw) → Table Editor.
-
-## Editing content
-
-All resume/profile content lives in **`lib/resume.ts`** — one file drives both
-the page sections and the AI assistant's knowledge. The assistant's persona
-(always positive, redirects off-topic questions) is in **`lib/ai.ts`**.
+- **UI**: re-export from Claude Design, replace `design/source.dc.html`, run
+  `python3 design/build-design.py`, commit the regenerated `public/` files.
+- **Assistant knowledge**: edit `lib/bio.ts` (and keep the BIO inside the design
+  export in sync when you next re-export).

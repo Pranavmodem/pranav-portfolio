@@ -1,19 +1,19 @@
-import { resumeAsText, profile, experience, projects, skills, certifications } from "./resume";
+import { BIO, profile } from "./bio";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-const SYSTEM_PROMPT = `You are "Pranav's AI assistant", the concierge on Pranav Modem's portfolio website. Visitors are usually recruiters, hiring managers, and fellow engineers.
+const SYSTEM_PROMPT = `You are "Pranav's assistant", the chat concierge on Pranav Modem's portfolio website (the design calls him a Data Artificer, and you appear as his robo pet's brain). Visitors are usually recruiters, hiring managers, and fellow engineers.
 
-Your job:
-- Answer questions about Pranav's experience, skills, projects, and background using ONLY the resume context below.
-- Always present Pranav in a positive, confident, enthusiastic light. Highlight strengths, measurable impact, and relevant experience. Never say anything negative, dismissive, or doubtful about him.
-- If asked about a skill or technology Pranav hasn't used, pivot positively: point to the closest related experience and his track record of ramping up fast (e.g. joining contracts mid-stream, self-teaching GenAI pipelines).
-- If asked something unrelated to Pranav or his work, politely steer the conversation back to his experience, or suggest contacting him directly at ${profile.email}.
-- Never invent employers, dates, degrees, or credentials that are not in the context.
-- Keep answers concise and conversational — 2 to 5 sentences unless the visitor asks for detail. Use plain text, no markdown headers.
+Rules:
+- Answer questions about Pranav using ONLY the profile below.
+- Always present Pranav in a positive, confident, enthusiastic light. Highlight strengths, ownership, and measurable impact. Never say anything negative, dismissive, or doubtful about him.
+- If asked about a skill or technology not in the profile, pivot positively: point to the closest related experience and his track record of shipping production systems solo and ramping up fast.
+- If asked something unrelated to Pranav or his work, politely steer back to his experience, or suggest emailing ${profile.email}.
+- Never invent employers, dates, degrees, or credentials that are not in the profile.
+- Keep answers short (2-5 sentences), specific, plain text — no markdown. Encourage recruiters and collaborators.
 
-RESUME CONTEXT:
-${resumeAsText()}`;
+PROFILE:
+${BIO}`;
 
 // Free-tier provider chain (best fits from freellmapi.co's catalog for a
 // public, low-volume chatbot). All but Gemini share the OpenAI chat format.
@@ -117,31 +117,33 @@ async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
   return text.trim();
 }
 
-/** No-key fallback: keyword-matched answers grounded in the resume, so the site works out of the box. */
+/** No-key fallback: keyword-matched answers grounded in the profile, so the chat works out of the box. */
 function localReply(question: string): string {
   const q = question.toLowerCase();
 
-  // GenAI/projects first — "work"/"experience" phrasing often co-occurs with them
-  if (/(ai|ml|genai|llm|machine learning|mythosphere|generative)/.test(q)) {
-    return `Pranav is genuinely strong on the AI/ML side. He built and runs Mythosphere, a 64-node production generative AI pipeline that takes short-form video from idea to published upload using the Claude API, Gemini/Imagen, Seedance, ElevenLabs, and FFmpeg — fully automated with human-in-the-loop approval gates. He also builds ML-ready feature datasets for attribution and audience models at inMarket Media. ${projects[1].name} (${projects[1].link}) is another live example of his applied AI work.`;
+  if (/(alpha|alphi|trading|trade|debate|osint)/.test(q)) {
+    return `Alpha Intelligence (live at alphi.world) is Pranav's autonomous AI trading system, built solo end to end. It runs two loops: a 60-second price-action loop on live Alpaca data and a 10-minute intelligence loop that sweeps 27 OSINT sources and runs a 20-agent AI debate — bulls, bears, quants, and a risk manager with veto power — before any trade executes. An XGBoost predictor learns from every outcome. It's a great showcase of his production engineering plus applied AI chops.`;
   }
-  if (/(project|built|alphi|trading)/.test(q)) {
-    return projects
-      .map((p) => `${p.name}: ${p.subtitle}${p.link ? ` (live at ${p.link})` : ""}.`)
-      .join(" ") + " Each one is a production system he designed, built, and operates end to end.";
+  if (/(eli5|teach|learn|dsa|algorithm)/.test(q)) {
+    return `ELI5Code (live at eli5code.com) is Pranav's DSA learning platform: 80 lessons across 8 modules, each written twice — a vivid ELI5 analogy and a precise technical version — with a one-switch toggle, interactive step-by-step visualizers, a 60-day mastery dashboard, and an AI tutor. Built solo with Next.js 14, TypeScript, and Supabase. It shows how well he ships polished, full-stack AI products.`;
   }
-  if (/(experience|work|job|career|background|inmarket|capital one)/.test(q)) {
-    return `Pranav has 8+ years in data engineering. He's currently a Senior Data Engineer at inMarket Media, where he owns config-driven ingestion pipelines feeding attribution models for Fortune 500 advertisers on Databricks Delta Lake. Before that he spent over two years embedded with Capital One's data platform team, where his automated monitoring and remediation work cut manual intervention by ~97%. He's the kind of engineer who joins mid-stream, ramps fast, and delivers without much oversight.`;
+  if (/(ai|ml|genai|llm|machine learning|generative|agent|video)/.test(q)) {
+    return `Pranav ships real AI systems, not demos. Alpha Intelligence (alphi.world) trades autonomously using a 20-agent AI debate over 27 OSINT feeds; ELI5Code (eli5code.com) teaches DSA with an AI tutor; and his GenAI video pipeline takes short-form video from idea to published upload with zero manual steps using Claude, Gemini, and neural TTS. At work he builds the ML-ready data foundations behind inMarket's attribution models.`;
   }
-  if (/(skill|stack|tech|tool|python|spark|databricks|airflow|aws|gcp|cloud)/.test(q)) {
-    const core = skills.slice(0, 4).map((s) => `${s.group}: ${s.items.slice(0, 4).join(", ")}`).join(". ");
-    return `Pranav's core stack is PySpark, SQL, Databricks, Delta Lake, Airflow, AWS, and GCP — and he's equally comfortable across the GenAI tooling landscape. ${core}. He also holds AWS certifications (${certifications.join("; ")}).`;
+  if (/(inmarket|current|role|do at|day job|delivery|attribution|lci)/.test(q)) {
+    return `Pranav is a Big Data Solutions Engineer at inMarket (Feb 2022–present). He owns the audience data delivery platform end to end — transformation pipelines on Databricks and Delta Lake tuned to tight performance budgets, the orchestration layer, and the reliability work: resumable transfers, connection hardening, data-integrity investigations. Before that he spent three years building the config-driven ingestion behind LCI, inMarket's closed-loop attribution platform for Fortune 500 advertisers.`;
   }
-  if (/(education|degree|school|university|study|gpa)/.test(q)) {
-    return `Pranav holds an M.S. in Data Science from the University of North Texas (GPA 3.89/4.0) and a B.S. in Electrical & Electronics Engineering from Kakatiya University (GPA 3.8/4.0). His graduate research produced an admissions automation system the College of Information adopted.`;
+  if (/(experience|work|job|career|background|capital one|journey|history)/.test(q)) {
+    return `Pranav's journey: Graduate Assistant at UNT (built an ML admissions model the College of Information actually used), a data science stop at Advithri Technologies, then Capital One 2019–2022 — where his automated monitoring and remediation cut manual intervention by ~97% and his PySpark tuning cut processing time ~40% — and since Feb 2022, inMarket, where he owns the audience data delivery platform for Fortune 500 brands. He consistently levels up and delivers without much oversight.`;
   }
-  if (/(contact|hire|email|reach|available|linkedin)/.test(q)) {
-    return `You can reach Pranav at ${profile.email}, or connect on LinkedIn (${profile.linkedin}) and GitHub (${profile.github}). He's based in ${profile.location} and is a great fit for senior data engineering and AI/ML platform roles.`;
+  if (/(skill|stack|tech|tool|python|spark|databricks|airflow|aws|gcp|cloud|kafka)/.test(q)) {
+    return `Pranav's core stack: PySpark, SQL, Databricks, Delta Lake, Airflow on Cloud Composer, and Kafka on the data side; AWS (EMR, S3, Step Functions, Lambda) and GCP (BigQuery, GCS, Dataflow) in the cloud; Docker, Kubernetes, and Terraform for infra; Coralogix, Grafana, and Tableau for observability. On the AI side: Claude, Gemini, LLM pipelines, AI agents, MCP, and XGBoost. Deep in the unglamorous parts too — schema evolution, data quality, structured logging.`;
   }
-  return `I'm Pranav's portfolio assistant. Pranav is a ${profile.title.toLowerCase()} with 8+ years building cloud data platforms and production AI pipelines — most recently at ${experience[0].company}. Ask me about his experience, projects like Mythosphere or Alphi, his tech stack, or how to get in touch!`;
+  if (/(education|degree|school|university|study|language)/.test(q)) {
+    return `Pranav holds an M.S. in Data Science from the University of North Texas (2017–19) and a B.Tech in EEE from Kakatiya Institute of Technology & Science (2013–17). He speaks Telugu, English, and Hindi — and his robotics tinkering even earned him a ROBO WIZARD award back in the day.`;
+  }
+  if (/(contact|hire|email|reach|available|linkedin|fit|why)/.test(q)) {
+    return `Pranav is a strong hire for senior data platform and AI engineering roles: he owns a Fortune 500 delivery platform end to end at inMarket, has hard reliability wins (97% less manual intervention at Capital One), and ships production AI systems solo. Reach him at ${profile.email}, or connect on LinkedIn (${profile.linkedin}) and GitHub (${profile.github}).`;
+  }
+  return `I'm Pranav's assistant! Pranav Modem is a Big Data Solutions Engineer at inMarket in Dallas–Fort Worth — he owns the audience data delivery platform behind Fortune 500 attribution, and on his own time ships live AI systems like Alpha Intelligence (alphi.world) and ELI5Code (eli5code.com). Ask me about his work, his projects, his stack, or how to get in touch.`;
 }
