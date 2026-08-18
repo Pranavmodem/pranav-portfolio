@@ -59,6 +59,9 @@ HIS RECENT TRACKER LOG (newest first)${log ? ":\n" + log : ": (no entries yet)"}
 
 // Free-tier provider chain (best fits from freellmapi.co's catalog for a
 // public, low-volume chatbot). All but Gemini share the OpenAI chat format.
+// Free-tier providers retire models without notice, so the default is only a
+// first guess — on a "model not found" error the code lists the provider's
+// live models and picks the best available one (cached per warm instance).
 const OPENAI_COMPATIBLE_PROVIDERS = [
   {
     name: "groq",
@@ -83,6 +86,51 @@ const OPENAI_COMPATIBLE_PROVIDERS = [
   },
 ] as const;
 
+type Provider = (typeof OPENAI_COMPATIBLE_PROVIDERS)[number];
+
+// Ranked preferences for auto-discovered chat models; first match wins.
+const MODEL_PREFERENCES = [
+  /gpt-oss-120b/i,
+  /llama-4.*maverick/i,
+  /llama-4/i,
+  /llama-3\.3-70b/i,
+  /kimi/i,
+  /qwen.*(instruct|chat)/i,
+  /70b/i,
+  /llama-3\.1-8b/i,
+  /gpt-oss/i,
+];
+// Never pick audio/safety/embedding models for chat.
+const MODEL_EXCLUDE = /whisper|tts|guard|embed|moderation|rerank|distil|ocr|vision/i;
+
+// Working model per provider, resolved after a model_not_found error.
+const resolvedModels: Record<string, string> = {};
+
+async function discoverModel(p: Provider, apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(p.url.replace(/\/chat\/completions$/, "/models"), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    let ids: string[] = (data?.data ?? [])
+      .map((m: { id?: string }) => m.id)
+      .filter((id: unknown): id is string => typeof id === "string" && !MODEL_EXCLUDE.test(id));
+    if (p.name === "openrouter") {
+      const free = ids.filter((id) => id.endsWith(":free"));
+      if (free.length) ids = free;
+    }
+    for (const pref of MODEL_PREFERENCES) {
+      const hit = ids.find((id) => pref.test(id));
+      if (hit) return hit;
+    }
+    return ids[0] ?? null;
+  } catch (err) {
+    console.error(`${p.name} model discovery failed:`, err);
+    return null;
+  }
+}
+
 /**
  * Calls the first available free-tier LLM provider, in order:
  * Groq → Cerebras → OpenRouter → Google Gemini → built-in responder (no key).
@@ -104,8 +152,7 @@ async function generateWithSystem(
     const key = process.env[p.keyEnv];
     if (!key) continue;
     try {
-      const model = process.env[p.modelEnv] || p.defaultModel;
-      return { reply: await callOpenAICompatible(p.url, key, model, system, messages), provider: p.name };
+      return { reply: await callOpenAICompatible(p, key, system, messages), provider: p.name };
     } catch (err) {
       console.error(`${p.name} failed, trying next provider:`, err);
     }
@@ -123,23 +170,39 @@ async function generateWithSystem(
 }
 
 async function callOpenAICompatible(
-  url: string,
+  p: Provider,
   apiKey: string,
-  model: string,
   system: string,
   messages: ChatMessage[]
 ): Promise<string> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: system }, ...messages],
-      max_tokens: 512,
-      temperature: 0.6,
-    }),
-  });
-  if (!res.ok) throw new Error(`${url} ${res.status}: ${await res.text()}`);
+  const postChat = (model: string) =>
+    fetch(p.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, ...messages],
+        max_tokens: 512,
+        temperature: 0.6,
+      }),
+    });
+
+  const model = process.env[p.modelEnv] || resolvedModels[p.name] || p.defaultModel;
+  let res = await postChat(model);
+
+  if (!res.ok) {
+    const errText = await res.text();
+    const modelGone =
+      (res.status === 404 || res.status === 400) && /model/i.test(errText);
+    if (!modelGone) throw new Error(`${p.url} ${res.status}: ${errText}`);
+    const discovered = await discoverModel(p, apiKey);
+    if (!discovered || discovered === model) throw new Error(`${p.url} ${res.status}: ${errText}`);
+    console.log(`${p.name}: model "${model}" unavailable, switching to "${discovered}"`);
+    resolvedModels[p.name] = discovered;
+    res = await postChat(discovered);
+    if (!res.ok) throw new Error(`${p.url} ${res.status}: ${await res.text()}`);
+  }
+
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error("empty response");
