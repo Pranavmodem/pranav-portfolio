@@ -16,17 +16,32 @@ PROFILE:
 ${BIO}`;
 
 type Entry = { kind: string; note: string | null; value: number | null; logged_at: string };
+type Food = {
+  eaten_on: string;
+  meal: string | null;
+  item: string;
+  grams: number | null;
+  kcal: number | null;
+  protein_g: number | null;
+};
+
+export type PersonalContext = {
+  entries: Entry[];
+  foods: Food[];
+  prefs: string;
+};
 
 /**
  * Personal mode — used when Pranav is logged in at /app. No topic
  * restrictions: general questions, diet and nutrition advice, workout
- * planning, anything. Recent tracker entries are provided as context.
+ * planning, anything. His saved preferences, recent food log, and habit
+ * entries are provided as context.
  */
 export async function generatePersonalReply(
   messages: ChatMessage[],
-  entries: Entry[]
+  ctx: PersonalContext
 ): Promise<{ reply: string; provider: string }> {
-  const log = entries
+  const log = ctx.entries
     .map((e) => {
       const when = new Date(e.logged_at).toLocaleString("en-US", {
         timeZone: "America/Chicago",
@@ -39,14 +54,28 @@ export async function generatePersonalReply(
     })
     .join("\n");
 
+  const foodLog = ctx.foods
+    .map(
+      (f) =>
+        `- [${f.eaten_on}] ${f.meal ?? "meal"}: ${f.item}${f.grams != null ? ` ${f.grams}g` : ""}${
+          f.kcal != null ? `, ${f.kcal} kcal` : ""
+        }${f.protein_g != null ? `, ${f.protein_g}g protein` : ""}`
+    )
+    .join("\n");
+
   const system = `You are Pranav's personal assistant inside his private dashboard. Pranav Modem is a data engineer in Dallas–Fort Worth who tracks his diet, gym sessions, and habits here.
 
 - Answer ANY question helpfully — nutrition, meal ideas, workout programming, recovery, scheduling, technical topics, general knowledge. You are not limited to any subject.
-- For diet and fitness questions, give practical, specific, encouraging advice. Use his recent log below to personalize (patterns, streaks, gaps, calories/macros if noted). Note you're not a medical professional if something needs a doctor.
+- For diet and fitness questions, give practical, specific, encouraging advice. Use his logs below to personalize (patterns, streaks, gaps, calories/macros). Note you're not a medical professional if something needs a doctor.
+- Respect his saved preferences below in every answer.
 - Be concise by default (under ~8 sentences) but go deeper when asked.
 - Plain text, no markdown headers.
 
-HIS RECENT TRACKER LOG (newest first)${log ? ":\n" + log : ": (no entries yet)"}`;
+HIS SAVED PREFERENCES${ctx.prefs ? ":\n" + ctx.prefs : ": (none saved yet — he can save them in the Assistant tab)"}
+
+RECENT FOOD LOG (newest first)${foodLog ? ":\n" + foodLog : ": (no meals logged yet)"}
+
+RECENT HABIT LOG (newest first)${log ? ":\n" + log : ": (no entries yet)"}`;
 
   const viaProvider = await generateWithSystem(system, messages);
   if (viaProvider) return viaProvider;

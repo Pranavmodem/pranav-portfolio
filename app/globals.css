@@ -57,6 +57,66 @@ body {
   transform: translateY(-2px);
 }
 
+/* Pranav HQ — Apple Health-style building blocks */
+.ios-card {
+  background: #1c1c1e;
+  border-radius: 16px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ios-input {
+  width: 100%;
+  border-radius: 10px;
+  background: #2c2c2e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  color: #fff;
+  outline: none;
+}
+
+.ios-input::placeholder {
+  color: #8e8e93;
+}
+
+.ios-input:focus {
+  border-color: #ff375f;
+}
+
+.ios-btn {
+  width: 100%;
+  border-radius: 12px;
+  background: #ff375f;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.ios-btn:active {
+  transform: scale(0.98);
+}
+
+.ios-btn:disabled {
+  opacity: 0.5;
+}
+
+.ios-chip {
+  border-radius: 10px;
+  background: #2c2c2e;
+  padding: 0.6rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.ios-chip:active {
+  background: #3a3a3c;
+}
+
 .btn-primary {
   border-radius: 0.5rem;
   background: var(--color-violet-glow);

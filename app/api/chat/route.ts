@@ -38,12 +38,20 @@ export async function POST(req: NextRequest) {
 
   if (user && token) {
     const db = createUserClient(token);
-    const { data: entries } = await db
-      .from("entries")
-      .select("kind, note, value, logged_at")
-      .order("logged_at", { ascending: false })
-      .limit(40);
-    const { reply, provider } = await generatePersonalReply(messages, entries ?? []);
+    const [{ data: entries }, { data: foods }, { data: prefRow }] = await Promise.all([
+      db.from("entries").select("kind, note, value, logged_at").order("logged_at", { ascending: false }).limit(40),
+      db
+        .from("food_log")
+        .select("eaten_on, meal, item, grams, kcal, protein_g")
+        .order("created_at", { ascending: false })
+        .limit(40),
+      db.from("user_prefs").select("content").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const { reply, provider } = await generatePersonalReply(messages, {
+      entries: entries ?? [],
+      foods: foods ?? [],
+      prefs: prefRow?.content ?? "",
+    });
     return NextResponse.json({ reply, provider, mode: "personal" });
   }
 
