@@ -58,6 +58,15 @@ body {
 }
 
 /* Pranav HQ — Apple Health-style building blocks */
+html {
+  -webkit-tap-highlight-color: transparent;
+  color-scheme: dark;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
 .ios-card {
   background: #1c1c1e;
   border-radius: 16px;
@@ -70,10 +79,14 @@ body {
   border-radius: 10px;
   background: #2c2c2e;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.6rem 0.85rem;
-  font-size: 0.9rem;
+  padding: 0.65rem 0.85rem;
+  /* 16px minimum stops iOS Safari zooming the page on focus */
+  font-size: 1rem;
   color: #fff;
   outline: none;
+  color-scheme: dark;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .ios-input::placeholder {
@@ -106,7 +119,8 @@ body {
 .ios-chip {
   border-radius: 10px;
   background: #2c2c2e;
-  padding: 0.6rem 0.5rem;
+  padding: 0.7rem 0.5rem;
+  min-height: 44px; /* Apple's minimum touch target */
   font-size: 0.78rem;
   font-weight: 500;
   color: #fff;

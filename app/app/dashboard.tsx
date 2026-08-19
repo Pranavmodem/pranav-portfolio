@@ -14,7 +14,6 @@ type Food = {
   kcal: number | null;
   protein_g: number | null;
 };
-type Entry = { id: string; kind: string; note: string | null; value: number | null; logged_at: string };
 type Reminder = {
   id: string;
   title: string;
@@ -25,6 +24,7 @@ type Reminder = {
 };
 type Msg = { role: "user" | "assistant"; content: string };
 
+const GOALS = { kcal: 1500, protein: 150 };
 const MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const MEAL_ICONS: Record<string, string> = { breakfast: "🌅", lunch: "☀️", dinner: "🌙", snack: "🍎" };
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -36,7 +36,7 @@ const todayChicago = () =>
     new Date()
   );
 
-/* ── Root ──────────────────────────────────────────────────────────── */
+/* ── Root: everything is behind login ──────────────────────────────── */
 
 export default function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
@@ -52,6 +52,16 @@ export default function Dashboard() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0b0b0f]">
+        <div className="h-10 w-10 animate-pulse rounded-full bg-white/10" />
+      </div>
+    );
+  }
+
+  if (!session) return <LoginScreen />;
+
   const dateLabel = new Date().toLocaleDateString("en-US", {
     timeZone: TZ,
     weekday: "long",
@@ -61,13 +71,21 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0b0b0f]">
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-28 pt-6 sm:px-6">
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-32 pt-6 sm:px-6">
         <header className="mb-5 flex items-end justify-between">
           <div>
             <p className="text-sm font-medium text-[#8e8e93]">{dateLabel}</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Summary</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              {tab === "today" ? "Summary" : tab === "chat" ? "Assistant" : "Reminders"}
+            </h1>
           </div>
-          <AccountBadge session={session} authReady={authReady} />
+          <button
+            onClick={() => supabase.auth.signOut()}
+            title={`${session.user.email} — tap to sign out`}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#ff375f] to-[#bf5af2] text-sm font-bold text-white"
+          >
+            {(session.user.email ?? "P")[0].toUpperCase()}
+          </button>
         </header>
 
         {tab === "today" && <TodayView session={session} />}
@@ -75,8 +93,7 @@ export default function Dashboard() {
         {tab === "remind" && <RemindersView session={session} />}
       </main>
 
-      {/* iOS-style bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#121216]/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#121216]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
         <div className="mx-auto grid max-w-lg grid-cols-3">
           {(
             [
@@ -88,7 +105,7 @@ export default function Dashboard() {
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
                 tab === id ? "text-[#ff375f]" : "text-[#8e8e93]"
               }`}
             >
@@ -102,36 +119,9 @@ export default function Dashboard() {
   );
 }
 
-function AccountBadge({ session, authReady }: { session: Session | null; authReady: boolean }) {
-  const [open, setOpen] = useState(false);
-  if (!authReady) return <div className="h-9 w-9 rounded-full bg-white/10" />;
-  if (!session) {
-    return (
-      <>
-        <button
-          onClick={() => setOpen(true)}
-          className="rounded-full bg-[#ff375f] px-4 py-1.5 text-sm font-semibold text-white"
-        >
-          Sign in
-        </button>
-        {open && <LoginSheet onClose={() => setOpen(false)} />}
-      </>
-    );
-  }
-  return (
-    <button
-      onClick={() => supabase.auth.signOut()}
-      title={`${session.user.email} — tap to sign out`}
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ff375f] to-[#bf5af2] text-sm font-bold text-white"
-    >
-      {(session.user.email ?? "P")[0].toUpperCase()}
-    </button>
-  );
-}
+/* ── Login (full screen — nothing personal is visible signed out) ──── */
 
-/* ── Login (bottom sheet) ──────────────────────────────────────────── */
-
-function LoginSheet({ onClose }: { onClose: () => void }) {
+function LoginScreen() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [stage, setStage] = useState<"email" | "code">("email");
@@ -157,24 +147,22 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
     const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
     setBusy(false);
     if (error) setErr(error.message);
-    else onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-t-2xl bg-[#1c1c1e] p-6 sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 text-center">
-          <h2 className="text-xl font-bold text-white">Sign in to Pranav HQ</h2>
-          <p className="mt-1 text-sm text-[#8e8e93]">Unlocks habits, reminders, health data & assistant memory</p>
+    <div className="flex min-h-screen items-center justify-center bg-[#0b0b0f] px-4">
+      <div className="ios-card w-full max-w-sm !p-7">
+        <div className="mb-6 text-center">
+          <div className="text-4xl">🤖</div>
+          <h1 className="mt-2 text-2xl font-bold text-white">Pranav HQ</h1>
+          <p className="mt-1 text-sm text-[#8e8e93]">Private. Sign in to continue.</p>
         </div>
         {stage === "email" ? (
           <form onSubmit={sendCode} className="flex flex-col gap-3">
             <input
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@email.com"
@@ -185,21 +173,24 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={verify} className="flex flex-col gap-3">
             <p className="text-sm text-[#c7c7cc]">
-              Check {email} — enter the 6-digit code (or tap the emailed link on this device).
+              Check {email} — enter the 6-digit code, or tap the emailed link on this device.
             </p>
             <input
               inputMode="numeric"
+              autoComplete="one-time-code"
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="123456"
-              className="ios-input text-center font-mono text-lg tracking-[0.4em]"
+              className="ios-input text-center font-mono tracking-[0.4em]"
             />
             <button disabled={busy} className="ios-btn">{busy ? "Checking…" : "Sign in"}</button>
+            <button type="button" onClick={() => setStage("email")} className="text-center text-xs text-[#8e8e93]">
+              ← different email
+            </button>
           </form>
         )}
         {err && <p className="mt-3 text-sm text-[#ff453a]">{err}</p>}
-        <button onClick={onClose} className="mt-4 w-full text-center text-sm text-[#8e8e93]">Cancel</button>
       </div>
     </div>
   );
@@ -207,10 +198,11 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
 
 /* ── Today ─────────────────────────────────────────────────────────── */
 
-function TodayView({ session }: { session: Session | null }) {
+function TodayView({ session }: { session: Session }) {
   const [foods, setFoods] = useState<Food[]>([]);
   const [health, setHealth] = useState<HealthSnapshot | null>(null);
   const [gymStreak, setGymStreak] = useState<number | null>(null);
+  const [waterToday, setWaterToday] = useState(0);
   const [err, setErr] = useState("");
 
   const loadFoods = useCallback(async () => {
@@ -224,16 +216,33 @@ function TodayView({ session }: { session: Session | null }) {
     else setFoods((data as Food[]) ?? []);
   }, []);
 
-  useEffect(() => {
-    loadFoods();
-  }, [loadFoods]);
+  const loadHabits = useCallback(async () => {
+    const { data } = await supabase
+      .from("entries")
+      .select("kind, logged_at")
+      .gte("logged_at", new Date(Date.now() - 30 * 86400_000).toISOString());
+    if (!data) return;
+    const gymDays = new Set(
+      data.filter((e) => e.kind === "gym").map((e) => new Date(e.logged_at).toLocaleDateString("en-US", { timeZone: TZ }))
+    );
+    let streak = 0;
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(Date.now() - i * 86400_000).toLocaleDateString("en-US", { timeZone: TZ });
+      if (gymDays.has(d)) streak++;
+      else if (i > 0) break;
+    }
+    setGymStreak(streak);
+    const todayLocal = new Date().toLocaleDateString("en-US", { timeZone: TZ });
+    setWaterToday(
+      data.filter(
+        (e) => e.kind === "water" && new Date(e.logged_at).toLocaleDateString("en-US", { timeZone: TZ }) === todayLocal
+      ).length
+    );
+  }, []);
 
   useEffect(() => {
-    if (!session) {
-      setHealth(null);
-      setGymStreak(null);
-      return;
-    }
+    loadFoods();
+    loadHabits();
     supabase
       .from("hae_raw")
       .select("data")
@@ -242,30 +251,13 @@ function TodayView({ session }: { session: Session | null }) {
       .then(({ data }) => {
         if (data?.length) setHealth(summarizeHae(data));
       });
-    supabase
-      .from("entries")
-      .select("kind, logged_at")
-      .eq("kind", "gym")
-      .gte("logged_at", new Date(Date.now() - 30 * 86400_000).toISOString())
-      .then(({ data }) => {
-        if (!data) return;
-        const days = new Set(data.map((e) => new Date(e.logged_at).toLocaleDateString("en-US", { timeZone: TZ })));
-        let streak = 0;
-        for (let i = 0; i < 30; i++) {
-          const d = new Date(Date.now() - i * 86400_000).toLocaleDateString("en-US", { timeZone: TZ });
-          if (days.has(d)) streak++;
-          else if (i > 0) break;
-        }
-        setGymStreak(streak);
-      });
-  }, [session]);
+  }, [loadFoods, loadHabits]);
 
   const today = todayChicago();
   const todayFoods = foods.filter((f) => f.eaten_on === today);
   const kcalToday = todayFoods.reduce((s, f) => s + (f.kcal ?? 0), 0);
   const proteinToday = Math.round(todayFoods.reduce((s, f) => s + (Number(f.protein_g) || 0), 0) * 10) / 10;
 
-  // last-7-day kcal bars
   const week: { day: string; kcal: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400_000);
@@ -275,54 +267,47 @@ function TodayView({ session }: { session: Session | null }) {
       kcal: foods.filter((f) => f.eaten_on === key).reduce((s, f) => s + (f.kcal ?? 0), 0),
     });
   }
-  const maxKcal = Math.max(500, ...week.map((w) => w.kcal));
+  const maxKcal = Math.max(GOALS.kcal, ...week.map((w) => w.kcal));
 
   return (
     <div className="flex flex-col gap-4">
       {err && <ErrorBanner msg={err} onClose={() => setErr("")} />}
 
-      {/* metric cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <MetricCard color="#ff375f" icon="🔥" label="Calories" value={kcalToday || "0"} unit="kcal today" />
-        <MetricCard color="#ff9f0a" icon="🥩" label="Protein" value={proteinToday || "0"} unit="g today" />
-        <MetricCard
-          color="#30d158"
-          icon="👟"
-          label="Steps"
-          value={session ? health?.steps ?? "…" : "—"}
-          unit={session ? health?.stepsDate ?? "latest" : "sign in"}
-        />
-        <MetricCard
-          color="#bf5af2"
-          icon="⚖️"
-          label="Weight"
-          value={session ? health?.weightKg ?? "…" : "—"}
-          unit={session ? "kg" : "sign in"}
-        />
-        <MetricCard
-          color="#64d2ff"
-          icon="😴"
-          label="Sleep"
-          value={session ? health?.sleepHours ?? "…" : "—"}
-          unit={session ? "hrs" : "sign in"}
-        />
-        <MetricCard
-          color="#ffd60a"
-          icon="🏋️"
-          label="Gym streak"
-          value={session ? gymStreak ?? "…" : "—"}
-          unit={session ? "days" : "sign in"}
-        />
+      {/* Daily goals — Apple-style rings */}
+      <div className="ios-card">
+        <p className="mb-3 text-sm font-semibold text-[#8e8e93]">DAILY GOALS</p>
+        <div className="flex items-center justify-around">
+          <Ring value={kcalToday} target={GOALS.kcal} color="#ff375f" label="Calories" unit="kcal" />
+          <Ring value={proteinToday} target={GOALS.protein} color="#ff9f0a" label="Protein" unit="g" />
+          <div className="flex flex-col gap-1 text-right">
+            <p className="text-sm text-[#8e8e93]">Remaining</p>
+            <p className="text-lg font-bold text-white">{Math.max(0, GOALS.kcal - kcalToday)} kcal</p>
+            <p className="text-sm font-semibold text-[#ff9f0a]">
+              {Math.max(0, Math.round((GOALS.protein - proteinToday) * 10) / 10)}g protein
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* weekly kcal bars */}
+      <PlanCard session={session} kcalToday={kcalToday} proteinToday={proteinToday} />
+
+      {/* health stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <MetricCard color="#30d158" icon="👟" label="Steps" value={health?.steps ?? "…"} unit={health?.stepsDate ?? "latest"} />
+        <MetricCard color="#bf5af2" icon="⚖️" label="Weight" value={health?.weightKg ?? "…"} unit="kg" />
+        <MetricCard color="#64d2ff" icon="😴" label="Sleep" value={health?.sleepHours ?? "…"} unit="hrs" />
+        <MetricCard color="#ff2d55" icon="❤️" label="Resting HR" value={health?.restingHr ?? "…"} unit="bpm" />
+        <MetricCard color="#ffd60a" icon="🏋️" label="Gym streak" value={gymStreak ?? "…"} unit="days" />
+        <MetricCard color="#0a84ff" icon="💧" label="Water" value={waterToday} unit="logged today" />
+      </div>
+
       <div className="ios-card">
         <p className="mb-3 text-sm font-semibold text-[#8e8e93]">CALORIES · LAST 7 DAYS</p>
         <div className="flex h-24 items-end justify-between gap-2">
           {week.map((w, i) => (
             <div key={i} className="flex flex-1 flex-col items-center gap-1">
               <div
-                className="w-full rounded-md bg-[#ff375f]"
+                className={`w-full rounded-md ${w.kcal > GOALS.kcal ? "bg-[#ff9f0a]" : "bg-[#ff375f]"}`}
                 style={{ height: `${Math.max(4, (w.kcal / maxKcal) * 80)}px`, opacity: w.kcal ? 1 : 0.18 }}
               />
               <span className="text-[10px] text-[#8e8e93]">{w.day}</span>
@@ -332,10 +317,52 @@ function TodayView({ session }: { session: Session | null }) {
       </div>
 
       <FoodLogger onAdded={loadFoods} />
+      <FoodList foods={todayFoods} onChanged={loadFoods} />
+      <HabitCard onLogged={loadHabits} />
+    </div>
+  );
+}
 
-      <FoodList foods={todayFoods} canDelete={!!session} onChanged={loadFoods} />
-
-      <HabitCard session={session} onLogged={() => setGymStreak(null)} />
+function Ring({
+  value,
+  target,
+  color,
+  label,
+  unit,
+}: {
+  value: number;
+  target: number;
+  color: string;
+  label: string;
+  unit: string;
+}) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  const pct = Math.min(1, target > 0 ? value / target : 0);
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative h-[88px] w-[88px]">
+        <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90">
+          <circle cx="44" cy="44" r={r} fill="none" stroke="#2c2c2e" strokeWidth="9" />
+          <circle
+            cx="44"
+            cy="44"
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth="9"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - pct)}
+            style={{ transition: "stroke-dashoffset .6s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-base font-bold leading-none text-white">{Math.round(value)}</span>
+          <span className="text-[10px] text-[#8e8e93]">/ {target}{unit === "g" ? "g" : ""}</span>
+        </div>
+      </div>
+      <span className="text-xs font-medium" style={{ color }}>{label}</span>
     </div>
   );
 }
@@ -373,6 +400,78 @@ function ErrorBanner({ msg, onClose }: { msg: string; onClose: () => void }) {
   );
 }
 
+/* ── Today's meal plan ─────────────────────────────────────────────── */
+
+function PlanCard({ session, kcalToday, proteinToday }: { session: Session; kcalToday: number; proteinToday: number }) {
+  const planKey = `hq_plan_${todayChicago()}`;
+  const [plan, setPlan] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    try {
+      setPlan(localStorage.getItem(planKey) ?? "");
+    } catch {}
+  }, [planKey]);
+
+  async function generate() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: `Build my meal plan for the REST of today. Budget: ~1500 kcal total for the day; I've already eaten ${kcalToday} kcal and ${proteinToday}g protein (see my food log). Always include my daily fixed items if not yet eaten: 2 scoops Ascend protein (~130 kcal, 25g protein each) and 20g collagen (~70 kcal, 18g protein). Build the rest around chicken thighs (RealGoods chicken bites, 25g protein, as an occasional snack alternative). List each meal with portion in grams, kcal, and protein, then a one-line total. Keep it simple.`,
+            },
+          ],
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "failed");
+      setPlan(json.reply);
+      try {
+        localStorage.setItem(planKey, json.reply);
+      } catch {}
+    } catch {
+      setPlan("Couldn't generate the plan — try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ios-card">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between">
+        <p className="text-sm font-semibold text-[#8e8e93]">TODAY&apos;S PLAN · 1500 KCAL</p>
+        <span className="text-[#8e8e93]">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="rounded-lg bg-black/30 px-3 py-2 text-xs leading-relaxed text-[#c7c7cc]">
+            <span className="font-semibold text-white">Fixed daily:</span> 2× Ascend protein scoop (260 kcal · 50g P) ·
+            20g collagen (70 kcal · 18g P)
+          </div>
+          {plan ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-white">{plan}</p>
+          ) : (
+            <p className="text-sm text-[#8e8e93]">
+              Tap generate and the assistant builds the rest of the day around chicken thighs, using what you&apos;ve
+              already logged.
+            </p>
+          )}
+          <button onClick={generate} disabled={busy} className="ios-btn">
+            {busy ? "Planning…" : plan ? "Regenerate plan" : "✨ Generate today's plan"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Food logging ──────────────────────────────────────────────────── */
 
 function FoodLogger({ onAdded }: { onAdded: () => void }) {
@@ -387,39 +486,65 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
 
+  const QUICK = [
+    { label: "🥤 Ascend scoop", item: "Ascend protein scoop", kcal: 130, protein: 25 },
+    { label: "✨ Collagen 20g", item: "Collagen 20g", kcal: 70, protein: 18 },
+    { label: "🍗 Chicken bites", item: "RealGoods chicken bites", kcal: 150, protein: 25 },
+  ];
+
+  async function insert(row: { meal: string; item: string; grams?: number | null; kcal?: number | null; protein_g?: number | null }) {
+    setBusy(true);
+    setErr("");
+    const { error } = await supabase.from("food_log").insert(row);
+    setBusy(false);
+    if (error) {
+      setErr(`Couldn't save: ${error.message}`);
+      return false;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    onAdded();
+    return true;
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!item.trim() || busy) return;
-    setBusy(true);
-    setErr("");
-    const { error } = await supabase.from("food_log").insert({
+    const ok = await insert({
       meal,
       item: item.trim(),
       grams: grams.trim() ? Number(grams) : null,
       kcal: kcal.trim() ? Math.round(Number(kcal)) : null,
       protein_g: protein.trim() ? Number(protein) : null,
     });
-    setBusy(false);
-    if (error) {
-      setErr(`Couldn't save: ${error.message}`);
-      return;
+    if (ok) {
+      setItem(""); setGrams(""); setKcal(""); setProtein("");
     }
-    setItem(""); setGrams(""); setKcal(""); setProtein("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    onAdded();
   }
 
   return (
     <form onSubmit={add} className="ios-card flex flex-col gap-3">
       <p className="text-sm font-semibold text-[#8e8e93]">LOG FOOD</p>
+      <div className="flex flex-wrap gap-2">
+        {QUICK.map((q) => (
+          <button
+            key={q.label}
+            type="button"
+            disabled={busy}
+            onClick={() => insert({ meal, item: q.item, kcal: q.kcal, protein_g: q.protein })}
+            className="ios-chip !w-auto px-3"
+          >
+            {q.label}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-4 gap-1 rounded-lg bg-black/40 p-1">
         {MEALS.map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMeal(m)}
-            className={`rounded-md py-1.5 text-xs font-medium capitalize transition-colors ${
+            className={`min-h-[38px] rounded-md text-xs font-medium capitalize transition-colors ${
               meal === m ? "bg-[#3a3a3c] text-white" : "text-[#8e8e93]"
             }`}
           >
@@ -427,12 +552,7 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
           </button>
         ))}
       </div>
-      <input
-        value={item}
-        onChange={(e) => setItem(e.target.value)}
-        placeholder="Chicken thigh curry + basmati…"
-        className="ios-input"
-      />
+      <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="Chicken thighs + veggies…" className="ios-input" />
       <div className="grid grid-cols-3 gap-2">
         <input value={grams} onChange={(e) => setGrams(e.target.value)} inputMode="decimal" placeholder="grams" className="ios-input" />
         <input value={kcal} onChange={(e) => setKcal(e.target.value)} inputMode="numeric" placeholder="kcal" className="ios-input" />
@@ -446,7 +566,7 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function FoodList({ foods, canDelete, onChanged }: { foods: Food[]; canDelete: boolean; onChanged: () => void }) {
+function FoodList({ foods, onChanged }: { foods: Food[]; onChanged: () => void }) {
   const [err, setErr] = useState("");
   async function remove(id: number) {
     const { error } = await supabase.from("food_log").delete().eq("id", id);
@@ -454,7 +574,7 @@ function FoodList({ foods, canDelete, onChanged }: { foods: Food[]; canDelete: b
     else onChanged();
   }
   if (foods.length === 0)
-    return <p className="px-1 text-center text-sm text-[#8e8e93]">Nothing eaten today — log your first meal above 🍽</p>;
+    return <p className="px-1 text-center text-sm text-[#8e8e93]">Nothing logged today — start above 🍽</p>;
 
   const byMeal = MEALS.map((m) => ({ meal: m, list: foods.filter((f) => (f.meal ?? "snack") === m) })).filter(
     (g) => g.list.length
@@ -469,7 +589,10 @@ function FoodList({ foods, canDelete, onChanged }: { foods: Food[]; canDelete: b
             <p className="text-sm font-semibold capitalize text-white">
               {MEAL_ICONS[g.meal]} {g.meal}
             </p>
-            <span className="text-xs text-[#8e8e93]">{g.list.reduce((s, f) => s + (f.kcal ?? 0), 0)} kcal</span>
+            <span className="text-xs text-[#8e8e93]">
+              {g.list.reduce((s, f) => s + (f.kcal ?? 0), 0)} kcal ·{" "}
+              {Math.round(g.list.reduce((s, f) => s + (Number(f.protein_g) || 0), 0))}g P
+            </span>
           </div>
           <div className="flex flex-col divide-y divide-white/5">
             {g.list.map((f) => (
@@ -482,11 +605,13 @@ function FoodList({ foods, canDelete, onChanged }: { foods: Food[]; canDelete: b
                       .join(" · ") || "no details"}
                   </p>
                 </div>
-                {canDelete && (
-                  <button onClick={() => remove(f.id)} className="text-[#8e8e93] hover:text-[#ff453a]" aria-label="Delete">
-                    ✕
-                  </button>
-                )}
+                <button
+                  onClick={() => remove(f.id)}
+                  className="flex h-9 w-9 items-center justify-center text-[#8e8e93] hover:text-[#ff453a]"
+                  aria-label="Delete"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
@@ -498,7 +623,7 @@ function FoodList({ foods, canDelete, onChanged }: { foods: Food[]; canDelete: b
 
 /* ── Habits ────────────────────────────────────────────────────────── */
 
-function HabitCard({ session, onLogged }: { session: Session | null; onLogged: () => void }) {
+function HabitCard({ onLogged }: { onLogged: () => void }) {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
@@ -506,20 +631,13 @@ function HabitCard({ session, onLogged }: { session: Session | null; onLogged: (
     setErr("");
     setMsg("");
     const { error } = await supabase.from("entries").insert({ kind, note });
-    if (error) setErr(`Couldn't save: ${error.message}${error.message.includes("row-level") ? " — are you signed in?" : ""}`);
+    if (error) setErr(`Couldn't save: ${error.message}`);
     else {
       setMsg(`${note} logged ✓`);
       setTimeout(() => setMsg(""), 2500);
       onLogged();
     }
   }
-
-  if (!session)
-    return (
-      <div className="ios-card text-sm text-[#8e8e93]">
-        🏋️ Sign in (top right) to track gym sessions, water, and sleep — and to give the assistant memory.
-      </div>
-    );
 
   return (
     <div className="ios-card">
@@ -537,7 +655,7 @@ function HabitCard({ session, onLogged }: { session: Session | null; onLogged: (
 
 /* ── Assistant ─────────────────────────────────────────────────────── */
 
-function AssistantView({ session }: { session: Session | null }) {
+function AssistantView({ session }: { session: Session }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -554,7 +672,7 @@ function AssistantView({ session }: { session: Session | null }) {
     setMsgs([
       {
         role: "assistant",
-        content: "Hey Pranav! I can see your food log, habits, and saved preferences — ask me anything.",
+        content: "Hey Pranav! I can see your food log, habits, health data context, and saved preferences — ask me anything.",
       },
     ]);
   }, []);
@@ -579,11 +697,7 @@ function AssistantView({ session }: { session: Session | null }) {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        // send the last 20 turns, skipping any leading greeting
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ messages: next.filter((m, i) => !(i === 0 && m.role === "assistant")).slice(-20) }),
       });
       const json = await res.json();
@@ -603,13 +717,7 @@ function AssistantView({ session }: { session: Session | null }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {!session && (
-        <div className="rounded-xl bg-[#ff9f0a]/15 px-4 py-3 text-sm text-[#ffd60a]">
-          You&apos;re not signed in — the assistant is in public portfolio mode. Sign in (top right) for your
-          personal assistant with food-log context and saved preferences.
-        </div>
-      )}
-      {session && <PrefsEditor session={session} />}
+      <PrefsEditor session={session} />
       <div className="ios-card flex h-[56vh] min-h-[360px] flex-col overflow-hidden !p-0">
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
           <div className="flex flex-col gap-3">
@@ -679,15 +787,14 @@ function PrefsEditor({ session }: { session: Session }) {
       {open && (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-xs text-[#8e8e93]">
-            Saved here permanently and included in every answer — goals, diet rules, injuries, schedule, anything.
+            Saved permanently and included in every answer — goals, diet rules, injuries, schedule, anything.
           </p>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             disabled={!loaded}
-            rows={5}
-            placeholder={"e.g.\n- Goal: 90kg by December, high-protein diet\n- Vegetarian on Tuesdays\n- Push/pull/legs split, gym at 6pm\n- Remind me to hit 8,000 steps"}
-            className="ios-input resize-y !text-[13px] leading-relaxed"
+            rows={6}
+            className="ios-input resize-y leading-relaxed"
           />
           <button onClick={save} disabled={state === "saving" || !loaded} className="ios-btn">
             {state === "saving" ? "Saving…" : state === "saved" ? "Saved ✓" : state === "error" ? "Failed — retry" : "Save memory"}
@@ -700,7 +807,7 @@ function PrefsEditor({ session }: { session: Session }) {
 
 /* ── Reminders ─────────────────────────────────────────────────────── */
 
-function RemindersView({ session }: { session: Session | null }) {
+function RemindersView({ session }: { session: Session }) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("08:00");
@@ -715,20 +822,13 @@ function RemindersView({ session }: { session: Session | null }) {
   }, []);
 
   useEffect(() => {
-    if (session) load();
+    load();
     if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       setNotifState("unsupported");
     } else {
       setNotifState(Notification.permission === "granted" ? "on" : "off");
     }
-  }, [session, load]);
-
-  if (!session)
-    return (
-      <div className="ios-card text-sm text-[#8e8e93]">
-        ⏰ Sign in (top right) to create reminders with push notifications on your devices.
-      </div>
-    );
+  }, [load]);
 
   async function enableNotifications() {
     try {
@@ -745,7 +845,7 @@ function RemindersView({ session }: { session: Session | null }) {
       });
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session!.access_token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ subscription: sub.toJSON() }),
       });
       if (!res.ok) throw new Error("subscribe failed");
@@ -815,7 +915,7 @@ function RemindersView({ session }: { session: Session | null }) {
                 key={d}
                 type="button"
                 onClick={() => setDays((ds) => (ds.includes(i) ? ds.filter((x) => x !== i) : [...ds, i]))}
-                className={`rounded-md px-2 py-1 text-xs ${
+                className={`min-h-[32px] rounded-md px-2 text-xs ${
                   days.includes(i) ? "bg-[#ff375f]/25 text-white" : "text-[#8e8e93]"
                 }`}
               >
@@ -838,7 +938,7 @@ function RemindersView({ session }: { session: Session | null }) {
                 {r.time_of_day} · {r.days.length === 7 ? "every day" : r.days.map((d) => DAY_NAMES[d]).join(" ")}
               </p>
             </div>
-            <button onClick={() => remove(r.id)} className="text-[#8e8e93] hover:text-[#ff453a]" aria-label="Delete">✕</button>
+            <button onClick={() => remove(r.id)} className="flex h-9 w-9 items-center justify-center text-[#8e8e93] hover:text-[#ff453a]" aria-label="Delete">✕</button>
           </div>
         ))}
         {reminders.length === 0 && <p className="text-center text-sm text-[#8e8e93]">No reminders yet ⏰</p>}
