@@ -29,7 +29,8 @@ type Reminder = {
 };
 type Msg = { role: "user" | "assistant"; content: string };
 
-const GOALS = { kcal: 1500, protein: 150 };
+// 1500 kcal split: 150g protein (600 kcal) + 110g carbs (440) + 50g fat (450)
+const GOALS = { kcal: 1500, protein: 150, carbs: 110, fat: 50 };
 const MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const MEAL_ICONS: Record<string, string> = { breakfast: "🌅", lunch: "☀️", dinner: "🌙", snack: "🍎" };
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -294,17 +295,29 @@ function TodayView({ session }: { session: Session }) {
             </p>
           </div>
         </div>
-        {/* macro breakdown — always visible */}
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
+        {/* macro breakdown — completed vs goal, always visible */}
+        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/5 pt-3">
           {(
             [
-              ["Protein", proteinToday, "#ff9f0a"],
-              ["Carbs", carbsToday, "#0a84ff"],
-              ["Fat", fatToday, "#ffd60a"],
+              ["Protein", proteinToday, GOALS.protein, "#ff9f0a"],
+              ["Carbs", carbsToday, GOALS.carbs, "#0a84ff"],
+              ["Fat", fatToday, GOALS.fat, "#ffd60a"],
             ] as const
-          ).map(([label, v, color]) => (
-            <div key={label}>
-              <p className="text-lg font-bold text-white">{v}g</p>
+          ).map(([label, v, goal, color]) => (
+            <div key={label} className="flex flex-col items-center gap-1">
+              <p className="text-sm font-bold text-white">
+                {v}
+                <span className="font-normal text-[#8e8e93]"> / {goal}g</span>
+              </p>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#2c2c2e]">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, (v / goal) * 100)}%`,
+                    background: v > goal * 1.1 ? "#ff453a" : color,
+                  }}
+                />
+              </div>
               <p className="text-xs font-medium" style={{ color }}>{label}</p>
             </div>
           ))}
