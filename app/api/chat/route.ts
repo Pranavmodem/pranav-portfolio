@@ -49,19 +49,16 @@ export async function POST(req: NextRequest) {
 
   const { reply, provider } = await generateReply(messages);
 
-  // Fire-and-forget logging; UUID session ids only, chat still works if logging fails.
+  // Awaited (not fire-and-forget: serverless freezes after the response, which
+  // can drop background inserts). Chat still works if logging fails.
   const sessionId = body.sessionId;
   if (sessionId && /^[0-9a-f-]{36}$/i.test(sessionId)) {
     const userMsg = messages[messages.length - 1].content;
-    supabase
-      .from("chat_messages")
-      .insert([
-        { session_id: sessionId, role: "user", content: userMsg },
-        { session_id: sessionId, role: "assistant", content: reply },
-      ])
-      .then(({ error }) => {
-        if (error) console.error("chat log insert failed:", error.message);
-      });
+    const { error } = await supabase.from("chat_messages").insert([
+      { session_id: sessionId, role: "user", content: userMsg },
+      { session_id: sessionId, role: "assistant", content: reply },
+    ]);
+    if (error) console.error("chat log insert failed:", error.message);
   }
 
   return NextResponse.json({ reply, provider, mode: "public" });
