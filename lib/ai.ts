@@ -23,6 +23,8 @@ type Food = {
   grams: number | null;
   kcal: number | null;
   protein_g: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
 };
 
 export type PersonalContext = {
@@ -59,7 +61,9 @@ export async function generatePersonalReply(
       (f) =>
         `- [${f.eaten_on}] ${f.meal ?? "meal"}: ${f.item}${f.grams != null ? ` ${f.grams}g` : ""}${
           f.kcal != null ? `, ${f.kcal} kcal` : ""
-        }${f.protein_g != null ? `, ${f.protein_g}g protein` : ""}`
+        }${f.protein_g != null ? `, P${f.protein_g}g` : ""}${f.carbs_g != null ? `, C${f.carbs_g}g` : ""}${
+          f.fat_g != null ? `, F${f.fat_g}g` : ""
+        }`
     )
     .join("\n");
 
@@ -170,6 +174,41 @@ export async function generateReply(messages: ChatMessage[]): Promise<{ reply: s
   const viaProvider = await generateWithSystem(SYSTEM_PROMPT, messages);
   if (viaProvider) return viaProvider;
   return { reply: localReply(messages[messages.length - 1]?.content ?? ""), provider: "local" };
+}
+
+/**
+ * Estimates macros for a food description (portion-aware). Used by the
+ * dashboard's auto-fill. Returns null when no provider is available or the
+ * model's answer can't be parsed.
+ */
+export async function estimateFoodMacros(
+  item: string,
+  grams?: number | null
+): Promise<{ grams: number; kcal: number; protein_g: number; carbs_g: number; fat_g: number } | null> {
+  const system =
+    "You are a precise nutrition estimator. Reply ONLY with a single JSON object, no prose, no code fences.";
+  const question = `Food as eaten (cooked): "${item}"${grams ? `, portion: ${grams} g` : ""}.
+Return {"grams": <portion in grams — use the given portion, else a typical single serving>, "kcal": <integer kcal for that portion>, "protein_g": <g protein, one decimal>, "carbs_g": <g carbs, one decimal>, "fat_g": <g fat, one decimal>}.`;
+  const result = await generateWithSystem(system, [{ role: "user", content: question }]);
+  if (!result) return null;
+  try {
+    const match = result.reply.match(/\{[^{}]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]);
+    const round1 = (v: unknown) => Math.round(Number(v) * 10) / 10;
+    const out = {
+      grams: Number(parsed.grams),
+      kcal: Math.round(Number(parsed.kcal)),
+      protein_g: round1(parsed.protein_g),
+      carbs_g: round1(parsed.carbs_g),
+      fat_g: round1(parsed.fat_g),
+    };
+    if (Object.values(out).some((v) => !Number.isFinite(v) || v < 0)) return null;
+    if (out.kcal > 5000 || out.protein_g > 500) return null;
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 /** Runs the provider chain with a given system prompt; null when every provider is unavailable. */

@@ -13,7 +13,12 @@ type Food = {
   grams: number | null;
   kcal: number | null;
   protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
 };
+
+const sumMacro = (list: Food[], key: "protein_g" | "carbs_g" | "fat_g") =>
+  Math.round(list.reduce((s, f) => s + (Number(f[key]) || 0), 0) * 10) / 10;
 type Reminder = {
   id: string;
   title: string;
@@ -256,7 +261,9 @@ function TodayView({ session }: { session: Session }) {
   const today = todayChicago();
   const todayFoods = foods.filter((f) => f.eaten_on === today);
   const kcalToday = todayFoods.reduce((s, f) => s + (f.kcal ?? 0), 0);
-  const proteinToday = Math.round(todayFoods.reduce((s, f) => s + (Number(f.protein_g) || 0), 0) * 10) / 10;
+  const proteinToday = sumMacro(todayFoods, "protein_g");
+  const carbsToday = sumMacro(todayFoods, "carbs_g");
+  const fatToday = sumMacro(todayFoods, "fat_g");
 
   const week: { day: string; kcal: number }[] = [];
   for (let i = 6; i >= 0; i--) {
@@ -287,6 +294,21 @@ function TodayView({ session }: { session: Session }) {
             </p>
           </div>
         </div>
+        {/* macro breakdown — always visible */}
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
+          {(
+            [
+              ["Protein", proteinToday, "#ff9f0a"],
+              ["Carbs", carbsToday, "#0a84ff"],
+              ["Fat", fatToday, "#ffd60a"],
+            ] as const
+          ).map(([label, v, color]) => (
+            <div key={label}>
+              <p className="text-lg font-bold text-white">{v}g</p>
+              <p className="text-xs font-medium" style={{ color }}>{label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       <PlanCard session={session} kcalToday={kcalToday} proteinToday={proteinToday} />
@@ -316,7 +338,7 @@ function TodayView({ session }: { session: Session }) {
         </div>
       </div>
 
-      <FoodLogger onAdded={loadFoods} />
+      <FoodLogger session={session} onAdded={loadFoods} />
       <FoodList foods={todayFoods} onChanged={loadFoods} />
       <HabitCard onLogged={loadHabits} />
     </div>
@@ -474,7 +496,7 @@ function PlanCard({ session, kcalToday, proteinToday }: { session: Session; kcal
 
 /* ── Food logging ──────────────────────────────────────────────────── */
 
-function FoodLogger({ onAdded }: { onAdded: () => void }) {
+function FoodLogger({ session, onAdded }: { session: Session; onAdded: () => void }) {
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", hour12: false }).format(new Date()));
   const defaultMeal = hour < 11 ? "breakfast" : hour < 15 ? "lunch" : hour < 21 ? "dinner" : "snack";
   const [meal, setMeal] = useState<string>(defaultMeal);
@@ -482,17 +504,62 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
   const [grams, setGrams] = useState("");
   const [kcal, setKcal] = useState("");
   const [protein, setProtein] = useState("");
+  const [carbs, setCarbs] = useState("");
+  const [fat, setFat] = useState("");
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(""); // transient info like "Estimating…"
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
 
   const QUICK = [
-    { label: "🥤 Ascend scoop", item: "Ascend protein scoop", kcal: 130, protein: 25 },
-    { label: "✨ Collagen 20g", item: "Collagen 20g", kcal: 70, protein: 18 },
-    { label: "🍗 Chicken bites", item: "RealGoods chicken bites", kcal: 150, protein: 25 },
+    { label: "🥤 Ascend scoop", item: "Ascend protein scoop", kcal: 130, protein_g: 25, carbs_g: 3, fat_g: 1.5 },
+    { label: "✨ Collagen 20g", item: "Collagen 20g", kcal: 70, protein_g: 18, carbs_g: 0, fat_g: 0 },
+    { label: "🍗 Chicken bites", item: "RealGoods chicken bites", kcal: 150, protein_g: 25, carbs_g: 3, fat_g: 4 },
   ];
 
-  async function insert(row: { meal: string; item: string; grams?: number | null; kcal?: number | null; protein_g?: number | null }) {
+  async function estimate(): Promise<{ grams: number; kcal: number; protein_g: number; carbs_g: number; fat_g: number } | null> {
+    const res = await fetch("/api/food/estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ item: item.trim(), grams: grams.trim() ? Number(grams) : undefined }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "estimate failed");
+    return json;
+  }
+
+  async function autofill() {
+    if (!item.trim() || busy) return;
+    setBusy(true);
+    setErr("");
+    setStatus("✨ Estimating macros…");
+    try {
+      const est = await estimate();
+      if (est) {
+        if (!grams.trim()) setGrams(String(est.grams));
+        setKcal(String(est.kcal));
+        setProtein(String(est.protein_g));
+        setCarbs(String(est.carbs_g));
+        setFat(String(est.fat_g));
+        setStatus("Estimated — adjust if needed, then add.");
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't estimate");
+      setStatus("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function insert(row: {
+    meal: string;
+    item: string;
+    grams?: number | null;
+    kcal?: number | null;
+    protein_g?: number | null;
+    carbs_g?: number | null;
+    fat_g?: number | null;
+  }) {
     setBusy(true);
     setErr("");
     const { error } = await supabase.from("food_log").insert(row);
@@ -510,15 +577,42 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!item.trim() || busy) return;
-    const ok = await insert({
+    let row = {
       meal,
       item: item.trim(),
       grams: grams.trim() ? Number(grams) : null,
       kcal: kcal.trim() ? Math.round(Number(kcal)) : null,
       protein_g: protein.trim() ? Number(protein) : null,
-    });
+      carbs_g: carbs.trim() ? Number(carbs) : null,
+      fat_g: fat.trim() ? Number(fat) : null,
+    };
+    // macros left empty -> estimate them automatically before saving
+    if (row.kcal == null && row.protein_g == null) {
+      setBusy(true);
+      setStatus("✨ Estimating macros…");
+      try {
+        const est = await estimate();
+        if (est) {
+          row = {
+            ...row,
+            grams: row.grams ?? est.grams,
+            kcal: est.kcal,
+            protein_g: est.protein_g,
+            carbs_g: est.carbs_g,
+            fat_g: est.fat_g,
+          };
+        }
+      } catch {
+        // estimation failed — save what we have, macros can be edited later
+      } finally {
+        setBusy(false);
+        setStatus("");
+      }
+    }
+    const ok = await insert(row);
     if (ok) {
-      setItem(""); setGrams(""); setKcal(""); setProtein("");
+      setItem(""); setGrams(""); setKcal(""); setProtein(""); setCarbs(""); setFat("");
+      setStatus("");
     }
   }
 
@@ -531,7 +625,9 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
             key={q.label}
             type="button"
             disabled={busy}
-            onClick={() => insert({ meal, item: q.item, kcal: q.kcal, protein_g: q.protein })}
+            onClick={() =>
+              insert({ meal, item: q.item, kcal: q.kcal, protein_g: q.protein_g, carbs_g: q.carbs_g, fat_g: q.fat_g })
+            }
             className="ios-chip !w-auto px-3"
           >
             {q.label}
@@ -552,15 +648,27 @@ function FoodLogger({ onAdded }: { onAdded: () => void }) {
           </button>
         ))}
       </div>
-      <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="Chicken thighs + veggies…" className="ios-input" />
-      <div className="grid grid-cols-3 gap-2">
-        <input value={grams} onChange={(e) => setGrams(e.target.value)} inputMode="decimal" placeholder="grams" className="ios-input" />
-        <input value={kcal} onChange={(e) => setKcal(e.target.value)} inputMode="numeric" placeholder="kcal" className="ios-input" />
-        <input value={protein} onChange={(e) => setProtein(e.target.value)} inputMode="decimal" placeholder="protein g" className="ios-input" />
+      <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="Cooked dal · chicken thighs…" className="ios-input" />
+      <div className="flex gap-2">
+        <input value={grams} onChange={(e) => setGrams(e.target.value)} inputMode="decimal" placeholder="grams (optional)" className="ios-input" />
+        <button type="button" onClick={autofill} disabled={busy || !item.trim()} className="ios-btn !w-auto whitespace-nowrap px-3">
+          ✨ Auto-fill
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        <input value={kcal} onChange={(e) => setKcal(e.target.value)} inputMode="numeric" placeholder="kcal" className="ios-input !px-2 text-center" />
+        <input value={protein} onChange={(e) => setProtein(e.target.value)} inputMode="decimal" placeholder="P g" className="ios-input !px-2 text-center" />
+        <input value={carbs} onChange={(e) => setCarbs(e.target.value)} inputMode="decimal" placeholder="C g" className="ios-input !px-2 text-center" />
+        <input value={fat} onChange={(e) => setFat(e.target.value)} inputMode="decimal" placeholder="F g" className="ios-input !px-2 text-center" />
       </div>
       <button disabled={busy || !item.trim()} className="ios-btn">
-        {busy ? "Saving…" : saved ? "Added ✓" : "Add to log"}
+        {busy ? (status || "Saving…") : saved ? "Added ✓" : "Add to log"}
       </button>
+      {status && !busy && <p className="text-xs text-[#8e8e93]">{status}</p>}
+      <p className="text-[11px] leading-snug text-[#8e8e93]">
+        Leave macros empty and they&apos;re estimated automatically when you add — e.g. &quot;cooked dal&quot; fills
+        kcal, protein, carbs &amp; fat itself.
+      </p>
       {err && <p className="text-sm text-[#ff453a]">{err}</p>}
     </form>
   );
@@ -590,8 +698,8 @@ function FoodList({ foods, onChanged }: { foods: Food[]; onChanged: () => void }
               {MEAL_ICONS[g.meal]} {g.meal}
             </p>
             <span className="text-xs text-[#8e8e93]">
-              {g.list.reduce((s, f) => s + (f.kcal ?? 0), 0)} kcal ·{" "}
-              {Math.round(g.list.reduce((s, f) => s + (Number(f.protein_g) || 0), 0))}g P
+              {g.list.reduce((s, f) => s + (f.kcal ?? 0), 0)} kcal · P {sumMacro(g.list, "protein_g")} · C{" "}
+              {sumMacro(g.list, "carbs_g")} · F {sumMacro(g.list, "fat_g")}
             </span>
           </div>
           <div className="flex flex-col divide-y divide-white/5">
@@ -600,7 +708,13 @@ function FoodList({ foods, onChanged }: { foods: Food[]; onChanged: () => void }
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-white">{f.item}</p>
                   <p className="text-xs text-[#8e8e93]">
-                    {[f.grams != null ? `${f.grams}g` : null, f.kcal != null ? `${f.kcal} kcal` : null, f.protein_g != null ? `${f.protein_g}g protein` : null]
+                    {[
+                      f.grams != null ? `${f.grams}g` : null,
+                      f.kcal != null ? `${f.kcal} kcal` : null,
+                      f.protein_g != null ? `P ${f.protein_g}` : null,
+                      f.carbs_g != null ? `C ${f.carbs_g}` : null,
+                      f.fat_g != null ? `F ${f.fat_g}` : null,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "no details"}
                   </p>

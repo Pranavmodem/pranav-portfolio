@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       db.from("entries").select("kind, note, value, logged_at").order("logged_at", { ascending: false }).limit(40),
       db
         .from("food_log")
-        .select("eaten_on, meal, item, grams, kcal, protein_g")
+        .select("eaten_on, meal, item, grams, kcal, protein_g, carbs_g, fat_g")
         .order("created_at", { ascending: false })
         .limit(40),
       db.from("user_prefs").select("content").eq("user_id", user.id).maybeSingle(),
